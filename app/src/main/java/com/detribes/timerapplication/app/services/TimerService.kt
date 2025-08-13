@@ -6,41 +6,39 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.detribes.timerapplication.R
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 
 class TimerService : Service() {
 
-    private val binder = LocalBinder()
-    private val _timeFlow = MutableStateFlow(0L)
-    private var remainingTime = 0L
-    private var isPaused = false
-    val timeFlow: StateFlow<Long> = _timeFlow
+    private val serviceDelegate : ServiceDelegate by inject()
 
-    private var job: Job? = null
+    override fun onBind(intent: Intent?): IBinder? = null
 
-    inner class LocalBinder : Binder() {
-        fun getService(): TimerService = this@TimerService
-    }
-
-    override fun onBind(intent: Intent?): IBinder = binder
-
-    override fun onCreate() {
-        super.onCreate()
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         startForegroundService()
+
+        serviceDelegate.init(
+            onUpdateNotification = { timeLeft -> updateNotification(timeLeft) },
+            onTimerFinished = { stopSelf() }
+        )
+
+        intent?.getLongExtra("duration", 0L)?.takeIf { it > 0 }?.let {
+            serviceDelegate.startTimer(it)
+        }
+
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceDelegate.stopTimer()
     }
 
     private fun createNotificationChannel() {
@@ -80,44 +78,5 @@ class TimerService : Service() {
         }
         NotificationManagerCompat.from(this).notify(1, notification)
     }
-
-    private fun runTimer() {
-        job = CoroutineScope(Dispatchers.Default).launch {
-            while (remainingTime > 0 && !isPaused) {
-                delay(1000)
-                remainingTime -= 1
-                _timeFlow.value = remainingTime
-                updateNotification(remainingTime)
-            }
-            if (remainingTime <= 0) {
-                stopSelf()
-            }
-        }
-    }
-
-    fun startTimer(duration: Long) {
-        job?.cancel()
-        remainingTime = duration
-        isPaused = false
-        runTimer()
-    }
-
-    fun pauseTimer() {
-        isPaused = true
-    }
-
-    fun resumeTimer() {
-        if (isPaused) {
-            isPaused = false
-            runTimer()
-        }
-    }
-
-    fun stopTimer() {
-        job?.cancel()
-        remainingTime = 0L
-        _timeFlow.value = 0L
-        stopSelf()
-    }
-
 }
+
