@@ -8,10 +8,13 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat.startForegroundService
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.detribes.timerapplication.R
 import com.detribes.timerapplication.app.services.TimerService
 import com.detribes.timerapplication.databinding.FragmentTimerScreenBinding
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class TimerScreenFragment : Fragment() {
@@ -43,35 +46,26 @@ class TimerScreenFragment : Fragment() {
     }
 
     private fun setupObservers() {
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
-            viewModel.state.collect { state ->
-                when (state) {
-                    is TimerState.Idle -> {
-                        binding.textViewCountdown.text = formatTime(0)
-                        binding.startPauseBtn.text = getString(state.startPauseText)
-                        binding.resetBtn.visibility = state.visibility
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.state.collect { state ->
+                    val timeText = when (state) {
+                        is TimerState.Idle -> formatTime(0)
+                        is TimerState.Finished -> formatTime(0)
+                        is TimerState.Running -> formatTime(state.timeLeft)
+                        is TimerState.Paused -> formatTime(state.timeLeft)
                     }
 
-                    is TimerState.Running -> {
-                        binding.textViewCountdown.text = formatTime(state.timeLeft)
-                        binding.startPauseBtn.text = getString(state.startPauseText)
-                        binding.resetBtn.visibility = state.visibility
-                    }
+                    val startPauseText = getString(state.startPauseText)
+                    val resetVisibility = state.visibility
 
-                    is TimerState.Paused -> {
-                        binding.textViewCountdown.text = formatTime(state.timeLeft)
-                        binding.startPauseBtn.text = getString(state.startPauseText)
-                        binding.resetBtn.visibility = state.visibility
-                    }
-
-                    is TimerState.Finished -> {
-                        binding.textViewCountdown.text = formatTime(0)
-                        binding.startPauseBtn.text = getString(state.startPauseText)
-                        binding.resetBtn.visibility = state.visibility
-                    }
+                    binding.textViewCountdown.text = timeText
+                    binding.startPauseBtn.text = startPauseText
+                    binding.resetBtn.visibility = resetVisibility
                 }
             }
         }
+
     }
 
     private fun setupListeners() {
