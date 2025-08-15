@@ -20,7 +20,6 @@ class MainActivity : AppCompatActivity() {
         beginTransaction().
         replace(R.id.main_container, TimerScreenFragment.newInstance()).
         commit()
-
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.POST_NOTIFICATIONS
